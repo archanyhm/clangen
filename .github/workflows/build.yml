@@ -8,6 +8,7 @@ jobs:
     # https://github.com/Thlumyn/clangen/blob/29c9e39fed9a09b8de906f5c3b91dc044fe9b9a5/.github/workflows/main.yml
     runs-on: macos-latest
     env:
+      # For High Sierra compatibility on older Macs
       MACOSX_DEPLOYMENT_TARGET: 10.13
     steps:
       - uses: actions/checkout@v3
