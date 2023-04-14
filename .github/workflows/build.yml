@@ -164,6 +164,10 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 4.8.x
       - name: install dependencies
         run: poetry install --with build -E discord
       - name: Configure dev
@@ -198,6 +202,14 @@ jobs:
         run: |
           cp dist/Clangen/.itch.toml dist/ 
           tar.exe -a -c -f Clangen_Win32.zip -C dist Clangen .itch.toml
+      - name: Build Installer
+        run: |
+          cd windows/ClanGenInstaller
+          $env:version_number='${{ env.VERSION_NUMBER }}'; dotnet build --configuration Release
+      - name: Upload Installer
+        with:
+          name: ClanGen_Win32_Installer
+          path: "windows/ClanGenInstaller/installers/ClanGen_${{ env.VERSION_NUMBER }}_x32.msi"
       - uses: actions/upload-artifact@v3
         with:
           name: Clangen_Win32
