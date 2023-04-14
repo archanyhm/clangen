@@ -207,6 +207,7 @@ jobs:
           cd windows/ClanGenInstaller
           $env:version_number='${{ env.VERSION_NUMBER }}'; dotnet build --configuration Release
       - name: Upload Installer
+        uses: actions/upload-artifact@v3
         with:
           name: ClanGen_Win32_Installer
           path: "windows/ClanGenInstaller/installers/ClanGen_${{ env.VERSION_NUMBER }}_x32.msi"
