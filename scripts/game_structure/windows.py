@@ -878,6 +878,110 @@ class ChangelogPopup(UIWindow):
                 self.kill()
 
 
+class DevVersionNoticePopup(UIWindow):
+    def __init__(self, last_screen):
+        super().__init__(scale(pygame.Rect((300, 300), (1000, 800))),
+                         window_display_title='Development version notice',
+                         object_id='#game_over_window',
+                         resizable=False)
+        self.set_blocking(True)
+        game.switches['window_open'] = True
+        self.last_screen = last_screen
+        self.changelog_popup_title = UITextBoxTweaked(
+            f"<strong>Development version notice</strong>",
+            scale(pygame.Rect((40, 20), (960, -1))),
+            line_spacing=1,
+            object_id="#changelog_popup_title",
+            container=self
+        )
+
+        self.box_unchecked = UIImageButton(scale(pygame.Rect((15, 710), (68, 68))), "", object_id="#unchecked_checkbox",
+                                           container=self)
+        self.box_checked = UIImageButton(scale(pygame.Rect((15, 710), (68, 68))), "", object_id="#checked_checkbox",
+                                         container=self)
+        self.box_text = UITextBoxTweaked(
+            f"I understand the risks",
+            scale(pygame.Rect((78, 714), (460, -1))),
+            line_spacing=.8,
+            object_id="#text_box_30",
+            container=self
+        )
+
+        self.continue_button = UIImageButton(
+            scale(pygame.Rect((556, 714), (204, 60))),
+            "",
+            object_id="#continue_button_small",
+            container=self
+        )
+
+        current_version_number = "{:.16}".format(get_version_info().version_number)
+
+        self.changelog_popup_subtitle = UITextBoxTweaked(
+            f"Version {current_version_number}",
+            scale(pygame.Rect((40, 70), (960, -1))),
+            line_spacing=1,
+            object_id="#changelog_popup_subtitle",
+            container=self
+        )
+
+        self.scrolling_container = pygame_gui.elements.UIScrollingContainer(
+            scale(pygame.Rect((20, 130), (960, 580))),
+            container=self,
+            manager=MANAGER)
+
+        with open("dev_version_notice.html", "r") as read_file:
+            file_cont = read_file.read()
+
+        self.changelog_text = UITextBoxTweaked(
+            f"{file_cont}",
+            scale(pygame.Rect((0, 0), (900, -1))),
+            object_id="#text_box_30",
+            line_spacing=.8,
+            container=self.scrolling_container,
+            manager=MANAGER)
+
+        self.changelog_text.disable()
+
+        self.close_button = UIImageButton(
+            scale(pygame.Rect((940, 10), (44, 44))),
+            "",
+            object_id="#exit_window_button",
+            starting_height=2,
+            container=self
+        )
+
+        self.box_unchecked.enable()
+        self.box_checked.hide()
+        self.continue_button.disable()
+
+        self.scrolling_container.set_scrollable_area_dimensions(
+            (self.changelog_text.relative_rect.width, self.changelog_text.relative_rect.height))
+
+    def process_event(self, event):
+        super().process_event(event)
+
+        if event.type == pygame_gui.UI_BUTTON_START_PRESS:
+            if event.ui_element == self.close_button:
+                game.switches['window_open'] = False
+                self.kill()
+            elif event.ui_element == self.box_unchecked:
+                self.box_unchecked.disable()
+                self.box_unchecked.hide()
+                self.box_checked.enable()
+                self.box_checked.show()
+                self.continue_button.enable()
+                with open(f"{get_cache_dir()}/has_acknowledged_dev_notice", 'w') as write_file:
+                    write_file.write(get_latest_version_number())
+            elif event.ui_element == self.box_checked:
+                self.box_checked.disable()
+                self.box_checked.hide()
+                self.box_unchecked.enable()
+                self.box_unchecked.show()
+                self.continue_button.disable()
+                if os.path.exists(f"{get_cache_dir()}/has_acknowledged_dev_notice"):
+                    os.remove(f"{get_cache_dir()}/has_acknowledged_dev_notice")
+
+
 class RelationshipLog(UIWindow):
     """This window allows the user to see the relationship log of a certain relationship."""
 

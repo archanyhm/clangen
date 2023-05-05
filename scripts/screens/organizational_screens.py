@@ -28,7 +28,8 @@ from scripts.game_structure.image_button import UIImageButton
 from scripts.utility import get_text_box_theme, scale, quit  # pylint: disable=redefined-builtin
 import pygame_gui
 from scripts.game_structure.game_essentials import game, screen, screen_x, screen_y, MANAGER
-from scripts.game_structure.windows import DeleteCheck, UpdateAvailablePopup, ChangelogPopup, SaveError
+from scripts.game_structure.windows import DeleteCheck, UpdateAvailablePopup, ChangelogPopup, SaveError, \
+    DevVersionNoticePopup
 from scripts.game_structure.discord_rpc import _DiscordRPC
 from scripts.game_structure import image_cache
 from ..housekeeping.datadir import get_data_dir, get_cache_dir
@@ -244,6 +245,10 @@ class StartScreen(Screens):
         self.update_button = UIImageButton(scale(pygame.Rect((1154, 50), (382.5, 75))), "",
                                            object_id="#update_button", manager=MANAGER)
         self.update_button.visible = 0
+
+        if get_version_info().is_source_build or get_version_info().is_dev():
+            if not os.path.exists(f"{get_cache_dir()}/has_acknowledged_dev_notice"):
+                DevVersionNoticePopup(game.switches['last_screen'])
 
         try:
             global has_checked_for_update
