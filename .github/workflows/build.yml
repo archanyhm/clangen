@@ -227,7 +227,7 @@ jobs:
       - name: install dependencies
         run: poetry install --with build -E discord
       - name: Remove pre-installed PyInstaller
-        run: poetry run pip uninstall PyInstaller
+        run: poetry run pip uninstall -y PyInstaller
       - name: Build PyInstaller bootloader
         run: |
           git clone https://github.com/pyinstaller/pyinstaller.git
@@ -356,7 +356,7 @@ jobs:
       - name: install dependencies
         run: poetry install --with build -E discord
       - name: Remove pre-installed PyInstaller
-        run: poetry run pip uninstall PyInstaller
+        run: poetry run pip uninstall -y PyInstaller
       - name: Build PyInstaller bootloader
         run: |
           git clone https://github.com/pyinstaller/pyinstaller.git
@@ -490,7 +490,7 @@ jobs:
       - name: install dependencies
         run: poetry install --with build -E discord
       - name: Remove pre-installed PyInstaller
-        run: poetry run pip uninstall PyInstaller
+        run: poetry run pip uninstall -y PyInstaller
       - name: Build PyInstaller bootloader
         run: |
           git clone https://github.com/pyinstaller/pyinstaller.git
