@@ -3,7 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::path::Path;
-use std::process::{Command};
+use std::process::Command;
 
 fn recursive_copy(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
     fs::create_dir_all(&destination)?;
@@ -11,11 +11,12 @@ fn recursive_copy(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let file_type = entry.file_type()?;
+        let file_name = entry.file_name();
 
         if file_type.is_dir() {
-            recursive_copy(entry.path(), destination.as_ref().join(entry.file_name()))?;
+            recursive_copy(entry.path(), destination.as_ref().join(file_name))?;
         } else {
-            fs::copy(entry.path(), destination.as_ref().join(entry.file_name()))?;
+            fs::copy(entry.path(), destination.as_ref().join(file_name))?;
         }
     }
 
@@ -26,7 +27,6 @@ fn move_update_files_win() -> io::Result<()> {
     println!("Starting update process");
     thread::sleep(time::Duration::from_secs(2));
 
-
     let args: Vec<String> = env::args().collect();
     let game_path = Path::new(&args[1]);
 
@@ -35,36 +35,43 @@ fn move_update_files_win() -> io::Result<()> {
     println!("Deleting old game files");
     for entry in entries {
         let entry = entry?;
+        let file_name = entry.file_name();
+        let file_name_str = file_name.to_str().unwrap();
 
-        if entry.file_name().to_str().unwrap() == "Downloads" { continue; }
+        if file_name_str == "Downloads" { continue; }
 
         let file_type = entry.file_type()?;
         if file_type.is_dir() {
             fs::remove_dir_all(entry.path())?
         } else {
-            let err = fs::remove_file(entry.path());
-
-            if err.is_err() {
-                println!("Can't delete file {}", entry.file_name().to_str().unwrap());
+            if let Err(_) = fs::remove_file(entry.path()) {
+                println!("Can't delete file {}", file_name_str);
             }
         }
     }
 
-    let entries = fs::read_dir(game_path.join("Downloads").join("Clangen"))?;
-
+    let download_path = game_path.join("Downloads").join("Clangen");
     println!("Applying updated files");
+    
+    let entries = fs::read_dir(&download_path)?;
     for entry in entries {
         let entry = entry?;
+        let file_name = entry.file_name();
+        let file_name_str = file_name.to_str().unwrap();
 
-        let file_name = entry.file_name().to_str().unwrap().to_owned();
+        if file_name_str == "Downloads" { continue; }
+
         let file_type = entry.file_type()?;
-
-        if file_name == "Downloads" { continue; }
+        let target_path = if file_name_str == "_internal" {
+            game_path.join("_internal")
+        } else {
+            game_path.join(file_name_str)
+        };
 
         if file_type.is_dir() {
-            recursive_copy(entry.path(), game_path.join(file_name))?;
+            recursive_copy(entry.path(), target_path)?;
         } else {
-            fs::copy(entry.path(), game_path.join(file_name))?;
+            fs::copy(entry.path(), target_path)?;
         }
     }
 
@@ -72,9 +79,7 @@ fn move_update_files_win() -> io::Result<()> {
 
     println!("Starting game");
     Command::new("cmd.exe")
-        .raw_arg("/C")
-        .raw_arg("start")
-        .raw_arg("Clangen.exe")
+        .args(["/C", "start", "Clangen.exe"])
         .current_dir(game_path)
         .creation_flags(0x00000008 | 0x01000000)
         .spawn()?;
