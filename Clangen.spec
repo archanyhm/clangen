@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from os import getenv
-
+import platform
 
 is_release = getenv('IS_RELEASE', '1') == '1'
 block_cipher = None
@@ -29,6 +29,10 @@ a.datas += [ ('version.ini', './version.ini', 'DATA') ]
 a.datas += [ ('changelog.txt', './changelog.txt', 'DATA') ]
 a.datas += [ ('OpenDataDirectory.bat', './bin/OpenDataDirectory.bat', 'DATA') ]
 a.datas += [ ('.itch.toml', './.itch.toml', 'DATA') ]
+
+# Add self_updater.exe to both locations for Windows
+if platform.system() == 'Windows':
+    a.datas += [ ('resources/self_updater.exe', './self_updater.exe', 'DATA') ]
 
 exe = EXE(
     pyz,
