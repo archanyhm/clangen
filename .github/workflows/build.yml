@@ -34,7 +34,7 @@ jobs:
           - os: windows-latest
             artifact_name: Clangen_Win32.zip
             unofficial_python_patch: true
-            python_version: "3.13.2"
+            python_version: "3.11.11"
             python_arch: "x86"
             itch_channel: win32
             api_artifact_name: win32
@@ -42,7 +42,7 @@ jobs:
           - os: windows-latest
             artifact_name: Clangen_Win64.zip
             unofficial_python_patch: true
-            python_version: "3.13.2"
+            python_version: "3.11.1"
             python_arch: "x64"
             itch_channel: win64
             api_artifact_name: win64
