@@ -31,7 +31,7 @@ jobs:
             itch_channel: linux64_glibc_235
             api_artifact_name: linux2.35
             
-          - os: windows-2019
+          - os: windows-latest
             artifact_name: Clangen_Win32.zip
             unofficial_python_patch: true
             python_version: "3.13.2"
@@ -77,6 +77,7 @@ jobs:
         with:
           poetry-version: latest
       - name: Setup Python (Win7)
+        shell: pwsh
         if: ${{ matrix.unofficial_python_patch == true }}
         run: |
           Invoke-WebRequest -Uri https://github.com/adang1345/PythonWin7/raw/refs/heads/master/${{ matrix.python_version }}/python.${{ matrix.python_version }}.nupkg -OutFile "python.${{ matrix.python_version }}.nupkg"
