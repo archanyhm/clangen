@@ -33,14 +33,16 @@ jobs:
             
           - os: windows-2019
             artifact_name: Clangen_Win32.zip
-            python_version: "3.8"
+            unofficial_python_patch: true
+            python_version: "3.13.2"
             python_arch: "x86"
             itch_channel: win32
             api_artifact_name: win32
             
           - os: windows-latest
             artifact_name: Clangen_Win64.zip
-            python_version: "3.8"
+            unofficial_python_patch: true
+            python_version: "3.13.2"
             python_arch: "x64"
             itch_channel: win64
             api_artifact_name: win64
@@ -74,7 +76,15 @@ jobs:
         uses: abatilo/actions-poetry@v3
         with:
           poetry-version: latest
+      - name: Setup Python (Win7)
+        if: ${{ matrix.unofficial_python_patch == true }}
+        run: |
+          Invoke-WebRequest -Uri https://github.com/adang1345/PythonWin7/raw/refs/heads/master/${{ matrix.python_version }}/python.${{ matrix.python_version }}.nupkg -OutFile "python.${{ matrix.python_version }}.nupkg"
+          mkdir "C:\PatchedPython"
+          nuget install python -Source $(Get-Location) -OutputDirectory "C:\PatchedPython\"
+          echo "C:\PatchedPython\python.${{ matrix.python_version }}\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Setup Python
+        if: ${{ matrix.unofficial_python_patch == false || matrix.variable == null }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python_version }}
