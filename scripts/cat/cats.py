@@ -8,22 +8,26 @@ import bisect
 import itertools
 import os.path
 import sys
-from random import choice, randint, sample, random, getrandbits, randrange
+from random import choice, randint, sample, random, randrange
 from typing import Dict, List, Any, Union, Callable, Optional, TYPE_CHECKING
 
 import i18n
 import ujson  # type: ignore
 
 import scripts.game_structure.localization as pronouns
-from scripts.cat import save_load
-from scripts.cat.enums import CatAge, CatRank, CatSocial, CatGroup
+from scripts.cat import save_load, pronouns
+from scripts.cat.enums import CatAge, CatRank, CatSocial, CatGroup, CatCompatibility
 from scripts.cat.history import History
 from scripts.cat.names import Name
 from scripts.cat.pelts import Pelt
 from scripts.cat.personality import Personality
 from scripts.cat.skills import CatSkills
 from scripts.cat.status import Status, StatusDict
-from scripts.cat.thoughts import Thoughts
+from scripts.events_module.thoughts.generate_thoughts import (
+    new_death_thought,
+    new_thought,
+    get_other_cat_for_thought,
+)
 from scripts.cat_relations.inheritance import Inheritance
 from scripts.cat_relations.relationship import Relationship
 from scripts.cat_relations.enums import RelType, RelTier, rel_type_tiers
@@ -44,15 +48,13 @@ from scripts.game_structure.game.switches import switch_get_value, Switch
 from scripts.game_structure.localization import load_lang_resource
 from scripts.game_structure.screen_settings import screen
 from scripts.housekeeping.datadir import get_save_dir
-from scripts.utility import (
-    clamp,
-    find_alive_cats_with_rank,
-    get_personality_compatibility,
+from scripts.cat.sprites.display_sprites import update_sprite, update_mask
+from scripts.events_module.text_adjust import (
     event_text_adjust,
-    update_sprite,
     leader_ceremony_text_adjust,
-    update_mask,
 )
+from scripts.events_module.event_filters import get_personality_compatibility
+from scripts.clan_package.get_clan_cats import find_alive_cats_with_rank
 
 import scripts.game_structure.screen_settings
 
@@ -499,9 +501,12 @@ class Cat:
                 )
                 return
 
+            game.updated_afterlife_cats.add(self)
+
             cat_default_afterlife_id = self.status.get_default_afterlife_id()
             if cat_default_afterlife_id == CatGroup.UNKNOWN_RESIDENCE_ID:
                 pass
+
             # kits are auto-accepted
             elif self.age in (CatAge.KITTEN, CatAge.NEWBORN):
                 self.history.add_afterlife_acceptance(
@@ -668,17 +673,17 @@ class Cat:
         if self.status.is_leader:
             if game.clan.leader_lives > 0:
                 lives_left = game.clan.leader_lives
-                self.thoughts(just_died=True, lives_left=lives_left)
+                self.get_new_thought(just_died=True, lives_left=lives_left)
                 return
             elif game.clan.leader_lives <= 0:
                 self.dead = True
                 game.just_died.append(self.ID)
                 game.clan.leader_lives = 0
-                self.thoughts(just_died=True, lives_left=0)
+                self.get_new_thought(just_died=True, lives_left=0)
         else:
             self.dead = True
             game.just_died.append(self.ID)
-            self.thoughts(just_died=True)
+            self.get_new_thought(just_died=True)
 
         for app in self.apprentice.copy():
             fetched_cat = Cat.fetch_cat(app)
@@ -746,14 +751,10 @@ class Cat:
                 if tier.is_extreme_pos:
                     very_high_types.extend(rel_type)
                 elif tier.is_mid_pos:
-                    # 50/50 if this will cause major grief
-                    if randint(1, 2) == 1:
-                        very_high_types.extend(rel_type)
-                    else:
-                        high_types.extend(rel_type)
-                elif tier.is_low_pos:
                     high_types.extend(rel_type)
-                elif tier.is_extreme_neg or tier.is_mid_neg:
+                elif tier.is_extreme_neg:
+                    very_low_types.extend(rel_type)
+                elif tier.is_mid_neg and randint(1, 4) == 1:
                     very_low_types.extend(rel_type)
                 continue
 
@@ -1532,20 +1533,20 @@ class Cat:
             self.status._change_rank(CatRank.KITTEN)
         self.in_camp = 1
 
-        if not self.status.alive_in_player_clan:
-            # this is handled in events.py
-            self.personality.set_kit(self.age.is_baby())
-            self.thoughts(other_clan_cats=other_clan_cats)
-            return
-
-        if self.dead and not self.faded:
-            self.thoughts()
-            return
-
         if old_age != self.age:
             # Things to do if the age changes
             self.personality.facet_wobble(facet_max=2)
             self.pelt.rebuild_sprite = True
+
+        if not self.status.alive_in_player_clan:
+            # this is handled in events.py
+            self.personality.set_kit(self.age.is_baby())
+            self.get_new_thought(other_clan_cats=other_clan_cats)
+            return
+
+        if self.dead and not self.faded:
+            self.get_new_thought()
+            return
 
         # Set personality to correct type
         self.personality.set_kit(self.age.is_baby())
@@ -1554,7 +1555,7 @@ class Cat:
         if self.status.rank.is_any_apprentice_rank():
             self.update_mentor()
 
-    def thoughts(
+    def get_new_thought(
         self, just_died=False, lives_left: int = 0, other_clan_cats: list = None
     ):
         """
@@ -1562,66 +1563,22 @@ class Cat:
         :param just_died: Set True if the cat is generating a death thought
         :param lives_left: If a leader is generating a death thought, include their lives left here
         """
-        if self.status.is_other_clancat:
-            if not other_clan_cats:
-                all_cats = []
-            else:
-                all_cats = other_clan_cats.copy()
-                all_cats.remove(self)
+        if self.status.is_other_clancat and not self.dead:
+            cat_list = other_clan_cats.copy() if other_clan_cats else []
         else:
-            all_cats = self.all_cats_list.copy()
-            all_cats.remove(self)
+            cat_list = self.all_cats_list.copy()
 
-        game_mode = switch_get_value(Switch.game_mode)
+        other_cat = get_other_cat_for_thought(
+            cat_list=cat_list,
+            main_cat=self,
+        )
+
         biome = switch_get_value(Switch.biome)
         camp = switch_get_value(Switch.camp_bg)
         try:
             season = game.clan.current_season
         except Exception:
             season = None
-
-        # get other cat
-        i = 0
-        other_cat = None
-        if all_cats:
-            other_cat = choice(all_cats)
-            # for cats inside the clan
-            if self.status.is_clancat:
-                # we want to limit how often dead cats are thought about
-                thinking_of_dead_cat = getrandbits(4) == 1
-                while all_cats and (
-                    (other_cat.dead and not thinking_of_dead_cat)
-                    or other_cat.ID not in self.relationships
-                ):
-                    all_cats.remove(other_cat)
-
-                    if not all_cats or i > 100:
-                        other_cat = None
-                        break
-
-                    other_cat = choice(all_cats)
-
-                    i += 1
-
-            # for dead cats, they can think about whoever they want
-            elif self.status.group.is_afterlife():
-                other_cat = choice(all_cats)
-
-            # for cats currently outside
-            # it appears as for now, kittypets and loners can only think about outsider cats
-            elif self.status.is_outsider:
-                while all_cats and (other_cat not in self.relationships):
-                    all_cats.remove(other_cat)
-                    if not all_cats:
-                        other_cat = None
-                        break
-
-                    other_cat = choice(all_cats)
-
-                    i += 1
-                    if i > 100:
-                        other_cat = None
-                        break
 
         # get chosen thought
         if just_died:
@@ -1630,13 +1587,11 @@ class Cat:
                 if self.status.group.is_afterlife()
                 else game.clan.instructor.status.group
             )
-            chosen_thought = Thoughts.new_death_thought(
-                self, other_cat, game_mode, biome, season, camp, afterlife, lives_left
+            chosen_thought = new_death_thought(
+                self, other_cat, biome, season, camp, afterlife, lives_left
             )
         else:
-            chosen_thought = Thoughts.get_chosen_thought(
-                self, other_cat, game_mode, biome, season, camp
-            )
+            chosen_thought = new_thought(self, other_cat, biome, season, camp)
 
         chosen_thought = event_text_adjust(
             self.__class__,
@@ -1949,7 +1904,14 @@ class Cat:
                 "event_triggered": new_illness.new,
             }
 
-    def get_injured(self, name, event_triggered=False, lethal=True, severity="default"):
+    def get_injured(
+        self,
+        name,
+        event_triggered=False,
+        lethal=True,
+        potential_scars=None,
+        severity="default",
+    ):
         """Add an injury to this cat.
 
         :param name: The injury to add
@@ -1958,6 +1920,8 @@ class Cat:
         :type event_triggered: bool, optional
         :param lethal: _description_, defaults to True
         :type lethal: bool, optional
+        :param potential_scars: List of possible scars to get upon healing, defaults to None
+        :type potential_scars: array, optional
         :param severity: _description_, defaults to 'default'
         :type severity: str, optional
         """
@@ -2007,6 +1971,7 @@ class Cat:
             also_got=injury["also_got"],
             cause_permanent=injury["cause_permanent"],
             event_triggered=event_triggered,
+            potential_scars=potential_scars,
         )
 
         if new_injury.name not in self.injuries:
@@ -2020,6 +1985,7 @@ class Cat:
                 "complication": None,
                 "cause_permanent": new_injury.cause_permanent,
                 "event_triggered": new_injury.new,
+                "potential_scars": new_injury.potential_scars,
             }
 
         if len(new_injury.also_got) > 0 and not int(random() * 5):
@@ -2786,6 +2752,8 @@ class Cat:
             if not os.path.exists(relation_cat_directory):
                 self.init_all_relationships()
                 for cat in Cat.all_cats.values():
+                    if cat == self:
+                        continue
                     cat.create_one_relationship(self)
                 return
             try:
@@ -2871,16 +2839,22 @@ class Cat:
             chance = 40
 
         compat = get_personality_compatibility(cat1, cat2)
-        if compat is True:
+        if compat == CatCompatibility.POSITIVE:
             chance += 10
-        elif compat is False:
+        elif compat == CatCompatibility.NEGATIVE:
             chance -= 5
 
         # Cat's compatibility with mediator also has an effect on success chance.
         for cat in (cat1, cat2):
-            if get_personality_compatibility(cat, mediator) is True:
+            if (
+                get_personality_compatibility(cat, mediator)
+                == CatCompatibility.POSITIVE
+            ):
                 chance += 5
-            elif get_personality_compatibility(cat, mediator) is False:
+            elif (
+                get_personality_compatibility(cat, mediator)
+                == CatCompatibility.NEGATIVE
+            ):
                 chance -= 5
 
         # Determine chance to fail, turning sabotage into mediate and mediate into sabotage

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from strenum import StrEnum
+from enum import Enum, auto
 
 
 class CatAge(StrEnum):
@@ -99,6 +100,7 @@ class CatStanding(StrEnum):
     LOST = "lost"
     EXILED = "exiled"
     KNOWN = "known"
+    UNKNOWN = "unknown"
 
 
 class CatGroup(StrEnum):
@@ -124,3 +126,9 @@ class CatGroup(StrEnum):
             self.PLAYER_CLAN,
             self.OTHER_CLAN,
         )
+
+
+class CatCompatibility(Enum):
+    NEGATIVE = auto()
+    POSITIVE = auto()
+    NEUTRAL = auto()
